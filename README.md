@@ -4,7 +4,7 @@
 
 ## 📈 订阅趋势图
 
-![](subscription_trends.png)
+![](subscription_trends_manual.png)
 
 ## 🎯 追踪列表
 
