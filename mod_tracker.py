@@ -133,7 +133,12 @@ def job():
 
     if current_batch_data:
         save_data(current_batch_data, current_time)
-        plot_trends()
+        # Try to plot, but don't fail the job if plotting fails
+        try:
+            plot_trends()
+        except Exception as e:
+            print(f"Warning: Plotting failed: {e}")
+            print("Continuing without plot update...")
     
     print("Job finished.")
 
