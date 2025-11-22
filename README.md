@@ -14,5 +14,7 @@
 2. **[隐藏身上装备 Hide Body Equipment](https://steamcommunity.com/sharedfiles/filedetails/?id=3597297032)**
 3. **[隐藏宠物 Hide The Pet](https://steamcommunity.com/sharedfiles/filedetails/?id=3599597476)**
 
+修改mod_config.py即可改变追踪目标
+
 ---
 *Powered by GitHub Actions & Python*
