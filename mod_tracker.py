@@ -90,6 +90,9 @@ def save_data(data_list, timestamp):
     df_new = pd.DataFrame(data_list)
     df_new['timestamp'] = timestamp
     
+    # Ensure correct column order: mod_id, timestamp, subscribers
+    df_new = df_new[['mod_id', 'timestamp', 'subscribers']]
+    
     if not os.path.exists(DATA_FILE):
         df_new.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
     else:
