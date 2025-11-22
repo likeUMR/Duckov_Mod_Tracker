@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
+import os
 from mod_config import MODS, MAIN_MOD_ID
 
 def plot_trends_from_csv(data_file, plot_file):
@@ -17,8 +18,8 @@ def plot_trends_from_csv(data_file, plot_file):
         plot_file: Path to output image file
     """
     try:
-        if not pd.io.common.file_exists(data_file):
-            print(f"No data file to plot: {data_file}")
+        if not os.path.exists(data_file):
+            print(f"ERROR: No data file to plot: {data_file}")
             return False
 
         print(f"Reading data from {data_file}...")
@@ -150,8 +151,12 @@ def plot_trends_from_csv(data_file, plot_file):
                 fig.tight_layout()
                 
                 plt.savefig(plot_file)
-                print(f"Plot saved to {plot_file}")
                 plt.close()
+                # Verify file was created
+                if not os.path.exists(plot_file):
+                    print(f"ERROR: Plot file was not created: {plot_file}")
+                    return False
+                print(f"Plot saved to {plot_file}")
                 return True
         except Exception as xkcd_error:
             # If xkcd style fails, use normal style
@@ -200,12 +205,16 @@ def plot_trends_from_csv(data_file, plot_file):
             fig.tight_layout()
             
             plt.savefig(plot_file)
-            print(f"Plot saved to {plot_file}")
             plt.close()
+            # Verify file was created
+            if not os.path.exists(plot_file):
+                print(f"ERROR: Plot file was not created: {plot_file}")
+                return False
+            print(f"Plot saved to {plot_file}")
             return True
 
     except Exception as e:
-        print(f"Error plotting: {e}")
+        print(f"ERROR: Plotting failed: {e}")
         import traceback
         traceback.print_exc()
         return False

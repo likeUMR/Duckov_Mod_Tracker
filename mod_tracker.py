@@ -12,7 +12,7 @@ from mod_config import MODS
 # Configuration
 DATA_FILE = 'mod_stats.csv'
 PLOT_FILE = 'subscription_trends.png'
-INTERVAL_MINUTES = 10
+INTERVAL_MINUTES = 15
 
 # Network configuration
 # GitHub Actions runs on US Azure servers, usually no proxy needed for Steam
@@ -102,9 +102,10 @@ def plot_trends():
     """
     读取CSV并绘制折线图
     复用公共绘图模块
+    返回: True if successful, False otherwise
     """
     from plot_utils import plot_trends_from_csv
-    plot_trends_from_csv(DATA_FILE, PLOT_FILE)
+    return plot_trends_from_csv(DATA_FILE, PLOT_FILE)
 
 def job():
     # Get current time rounded to minutes
@@ -136,12 +137,12 @@ def job():
 
     if current_batch_data:
         save_data(current_batch_data, current_time)
-        # Try to plot, but don't fail the job if plotting fails
-        try:
-            plot_trends()
-        except Exception as e:
-            print(f"Warning: Plotting failed: {e}")
-            print("Continuing without plot update...")
+        # Plot trends - fail if plotting fails
+        plot_success = plot_trends()
+        if not plot_success:
+            print("ERROR: Failed to generate plot!")
+            import sys
+            sys.exit(1)
     
     print("Job finished.")
 
