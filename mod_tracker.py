@@ -2,8 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg') # 设置非交互式后端，防止在无显示环境报错
 import schedule
 from datetime import datetime
 import os
@@ -11,62 +9,19 @@ import argparse
 import pytz
 from mod_config import MODS
 
-# 配置
+# Configuration
 DATA_FILE = 'mod_stats.csv'
 PLOT_FILE = 'subscription_trends.png'
 INTERVAL_MINUTES = 10
 
-# 网络配置
-# GitHub Actions 运行在美国Azure服务器，通常不需要代理访问Steam
-# 如果你在本地国内运行，请取消下面代理的注释并修改端口
+# Network configuration
+# GitHub Actions runs on US Azure servers, usually no proxy needed for Steam
+# If running locally in China, uncomment and modify the proxy port below
 # PROXIES = {
 #     'http': 'http://127.0.0.1:7890',
 #     'https': 'http://127.0.0.1:7890',
 # }
 PROXIES = None
-
-# 设置 matplotlib 字体
-# 尝试加载本地字体以支持中文，如果不存在则使用默认
-import matplotlib.font_manager as fm
-
-FONT_PATH = 'SimHei.ttf' # 将尝试下载或使用此字体
-my_font = None
-
-def download_font():
-    """下载中文字体以解决 GitHub Actions 乱码问题"""
-    if not os.path.exists(FONT_PATH):
-        print("Downloading SimHei font for Chinese support...")
-        url = "https://github.com/StellarCN/scp_zh/raw/master/fonts/SimHei.ttf"
-        try:
-            r = requests.get(url, stream=True)
-            with open(FONT_PATH, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-            print("Font downloaded.")
-        except Exception as e:
-            print(f"Failed to download font: {e}")
-
-# 尝试配置字体
-try:
-    # 检查并下载字体
-    if not os.path.exists(FONT_PATH):
-        # 在非本地环境(如GitHub Actions)尝试下载，或者你可以手动放一个字体文件在根目录
-        # 为了演示简单，这里如果本地没有就不下载了，除非是明确需要
-        # 但为了修复用户的乱码，我们这里做一个简单的检查
-        # 注意：自动下载大文件可能影响速度，这里仅作为fallback
-        pass
-
-    if os.path.exists(FONT_PATH):
-        my_font = fm.FontProperties(fname=FONT_PATH)
-        plt.rcParams['font.sans-serif'] = [my_font.get_name()]
-    else:
-        # Fallback 列表
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial', 'DejaVu Sans']
-except Exception as e:
-    print(f"Font config error: {e}")
-
-plt.rcParams['axes.unicode_minus'] = False
 
 def get_beijing_time(rounded=False):
     """
