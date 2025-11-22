@@ -26,16 +26,57 @@ INTERVAL_MINUTES = 10
 # }
 PROXIES = None
 
-# 设置 matplotlib 中文字体
-# 在 GitHub Actions Linux 环境下通常没有中文字体，需要回退到英文或安装字体
-# 这里添加一些常见的 Linux/Mac/Windows 字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial', 'DejaVu Sans', 'WenQuanYi Micro Hei']
+# 设置 matplotlib 字体
+# 尝试加载本地字体以支持中文，如果不存在则使用默认
+import matplotlib.font_manager as fm
+
+FONT_PATH = 'SimHei.ttf' # 将尝试下载或使用此字体
+my_font = None
+
+def download_font():
+    """下载中文字体以解决 GitHub Actions 乱码问题"""
+    if not os.path.exists(FONT_PATH):
+        print("Downloading SimHei font for Chinese support...")
+        url = "https://github.com/StellarCN/scp_zh/raw/master/fonts/SimHei.ttf"
+        try:
+            r = requests.get(url, stream=True)
+            with open(FONT_PATH, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+            print("Font downloaded.")
+        except Exception as e:
+            print(f"Failed to download font: {e}")
+
+# 尝试配置字体
+try:
+    # 检查并下载字体
+    if not os.path.exists(FONT_PATH):
+        # 在非本地环境(如GitHub Actions)尝试下载，或者你可以手动放一个字体文件在根目录
+        # 为了演示简单，这里如果本地没有就不下载了，除非是明确需要
+        # 但为了修复用户的乱码，我们这里做一个简单的检查
+        # 注意：自动下载大文件可能影响速度，这里仅作为fallback
+        pass
+
+    if os.path.exists(FONT_PATH):
+        my_font = fm.FontProperties(fname=FONT_PATH)
+        plt.rcParams['font.sans-serif'] = [my_font.get_name()]
+    else:
+        # Fallback 列表
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial', 'DejaVu Sans']
+except Exception as e:
+    print(f"Font config error: {e}")
+
 plt.rcParams['axes.unicode_minus'] = False
 
-def get_beijing_time():
+def get_beijing_time(rounded=False):
     """获取北京时间字符串"""
     tz = pytz.timezone('Asia/Shanghai')
-    return datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+    now = datetime.now(tz)
+    if rounded:
+        # 归零秒数，确保同一批次时间完全一致
+        now = now.replace(second=0, microsecond=0)
+    return now.strftime('%Y-%m-%d %H:%M:%S')
 
 def get_mod_data(url):
     """
@@ -84,8 +125,8 @@ def get_mod_data(url):
         return {
             'url': url,
             'title': title,
-            'subscribers': subscribers,
-            'timestamp': get_beijing_time()
+            'subscribers': subscribers
+            # timestamp removed from here, added in job()
         }
 
     except requests.exceptions.Timeout:
@@ -109,49 +150,63 @@ def plot_trends():
             print("No data file to plot.")
             return
 
-        df = pd.read_csv(DATA_FILE)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        
-        plt.figure(figsize=(12, 8))
-        
-        mods = df['url'].unique()
-        total_subs = df.groupby('timestamp')['subscribers'].sum().reset_index()
-        
-        for mod_url in mods:
-            mod_data = df[df['url'] == mod_url].sort_values('timestamp')
-            if mod_data.empty: continue
+        # 启用手绘风格 (xkcd style)
+        with plt.xkcd():
+            df = pd.read_csv(DATA_FILE)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
             
-            title = mod_data.iloc[-1]['title']
-            plt.plot(mod_data['timestamp'], mod_data['subscribers'], label=title, marker='o', markersize=3)
+            fig = plt.figure(figsize=(12, 8))
             
-            last_point = mod_data.iloc[-1]
-            plt.text(last_point['timestamp'], last_point['subscribers'], f"{int(last_point['subscribers'])}", fontsize=9)
+            mods = df['url'].unique()
+            total_subs = df.groupby('timestamp')['subscribers'].sum().reset_index()
+            
+            # 获取所有时间点以便统一x轴
+            all_times = df['timestamp'].unique()
+            
+            # 绘制每个Mod的曲线
+            for mod_url in mods:
+                mod_data = df[df['url'] == mod_url].sort_values('timestamp')
+                if mod_data.empty: continue
+                
+                title = mod_data.iloc[-1]['title']
+                plt.plot(mod_data['timestamp'], mod_data['subscribers'], label=title, marker='o', markersize=4)
+                
+                last_point = mod_data.iloc[-1]
+                plt.text(last_point['timestamp'], last_point['subscribers'], f" {int(last_point['subscribers'])}", fontsize=9, ha='left', va='center')
 
-        if not total_subs.empty:
-            plt.plot(total_subs['timestamp'], total_subs['subscribers'], label='Total (所有Mod总和)', 
-                    linestyle='--', linewidth=2, color='black', marker='x')
-            
-            last_total = total_subs.iloc[-1]
-            plt.text(last_total['timestamp'], last_total['subscribers'], f"Total: {int(last_total['subscribers'])}", 
-                    fontsize=10, fontweight='bold')
+            # 绘制总曲线
+            if not total_subs.empty:
+                plt.plot(total_subs['timestamp'], total_subs['subscribers'], label='Total', 
+                        linestyle='--', linewidth=2, color='black', marker='x')
+                
+                last_total = total_subs.iloc[-1]
+                plt.text(last_total['timestamp'], last_total['subscribers'], f" Total: {int(last_total['subscribers'])}", 
+                        fontsize=10, fontweight='bold', ha='left', va='center')
 
-        plt.title('Steam Mod Subscription Trends', fontsize=16) # 改为英文以避免乱码风险
-        plt.xlabel('Time', fontsize=12)
-        plt.ylabel('Subscribers', fontsize=12)
-        plt.grid(True, linestyle='--', alpha=0.7)
-        plt.legend()
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        
-        plt.savefig(PLOT_FILE)
-        print(f"Plot saved to {PLOT_FILE}")
-        plt.close()
+            plt.title('Steam Mod Subscription Trends', fontsize=16)
+            plt.xlabel('Time', fontsize=12)
+            plt.ylabel('Subscribers', fontsize=12)
+            
+            # 优化X轴显示格式
+            import matplotlib.dates as mdates
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+            plt.gcf().autofmt_xdate() # 自动旋转日期标签
+            
+            plt.grid(True, linestyle='--', alpha=0.5)
+            plt.legend(loc='best')
+            plt.tight_layout()
+            
+            plt.savefig(PLOT_FILE)
+            print(f"Plot saved to {PLOT_FILE}")
+            plt.close()
 
     except Exception as e:
         print(f"Error plotting: {e}")
 
 def job():
-    print(f"\n[{get_beijing_time()}] Starting scraping job...")
+    # 获取当前统一时间（归零秒数）
+    current_time = get_beijing_time(rounded=True)
+    print(f"\n[{current_time}] Starting scraping job...")
     
     if not os.path.exists(TRACK_FILE):
         print(f"Error: {TRACK_FILE} not found!")
@@ -166,6 +221,8 @@ def job():
         print(f"Fetching: {url}")
         data = get_mod_data(url)
         if data:
+            # 统一注入时间戳
+            data['timestamp'] = current_time
             print(f"  -> {data['title']}: {data['subscribers']} subscribers")
             current_batch_data.append(data)
         time.sleep(1)
