@@ -4,15 +4,14 @@ import time
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg') # 设置非交互式后端，防止在无显示环境报错
-import matplotlib.pyplot as plt
 import schedule
 from datetime import datetime
 import os
 import argparse
 import pytz
+from mod_config import MODS
 
 # 配置
-TRACK_FILE = 'track_target.txt'
 DATA_FILE = 'mod_stats.csv'
 PLOT_FILE = 'subscription_trends.png'
 INTERVAL_MINUTES = 10
@@ -70,17 +69,17 @@ except Exception as e:
 plt.rcParams['axes.unicode_minus'] = False
 
 def get_beijing_time(rounded=False):
-    """获取北京时间字符串"""
+    """
+    Get Beijing time string with second precision
+    """
     tz = pytz.timezone('Asia/Shanghai')
     now = datetime.now(tz)
-    if rounded:
-        # 归零秒数，确保同一批次时间完全一致
-        now = now.replace(second=0, microsecond=0)
     return now.strftime('%Y-%m-%d %H:%M:%S')
 
-def get_mod_data(url):
+def get_mod_data(mod_id, url):
     """
     获取单个Mod的订阅数据
+    返回: (mod_id, subscribers) 或 None
     """
     try:
         headers = {
@@ -103,9 +102,6 @@ def get_mod_data(url):
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        title_div = soup.find('div', class_='workshopItemTitle')
-        title = title_div.text.strip() if title_div else "Unknown Mod"
-        
         stats_table = soup.find('table', class_='stats_table')
         subscribers = 0
         
@@ -120,24 +116,24 @@ def get_mod_data(url):
                         subscribers = int(count_text)
                         break
         else:
-            print(f"Warning: stats_table not found for {url}")
+            print(f"Warning: stats_table not found for mod_id {mod_id}")
 
-        return {
-            'url': url,
-            'title': title,
-            'subscribers': subscribers
-            # timestamp removed from here, added in job()
-        }
+        return (mod_id, subscribers)
 
     except requests.exceptions.Timeout:
-        print(f"Timeout fetching {url}. (If you are in China, please check your proxy settings)")
+        print(f"Timeout fetching mod_id {mod_id}. (If you are in China, please check your proxy settings)")
         return None
     except Exception as e:
-        print(f"Error fetching {url}: {e}")
+        print(f"Error fetching mod_id {mod_id}: {e}")
         return None
 
-def save_data(data_list):
+def save_data(data_list, timestamp):
+    """
+    保存数据到CSV
+    格式: mod_id, timestamp, subscribers
+    """
     df_new = pd.DataFrame(data_list)
+    df_new['timestamp'] = timestamp
     
     if not os.path.exists(DATA_FILE):
         df_new.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
@@ -145,90 +141,43 @@ def save_data(data_list):
         df_new.to_csv(DATA_FILE, mode='a', header=False, index=False, encoding='utf-8-sig')
 
 def plot_trends():
-    try:
-        if not os.path.exists(DATA_FILE):
-            print("No data file to plot.")
-            return
-
-        # 启用手绘风格 (xkcd style)
-        with plt.xkcd():
-            df = pd.read_csv(DATA_FILE)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            
-            fig = plt.figure(figsize=(12, 8))
-            
-            mods = df['url'].unique()
-            total_subs = df.groupby('timestamp')['subscribers'].sum().reset_index()
-            
-            # 获取所有时间点以便统一x轴
-            all_times = df['timestamp'].unique()
-            
-            # 绘制每个Mod的曲线
-            for mod_url in mods:
-                mod_data = df[df['url'] == mod_url].sort_values('timestamp')
-                if mod_data.empty: continue
-                
-                title = mod_data.iloc[-1]['title']
-                plt.plot(mod_data['timestamp'], mod_data['subscribers'], label=title, marker='o', markersize=4)
-                
-                last_point = mod_data.iloc[-1]
-                plt.text(last_point['timestamp'], last_point['subscribers'], f" {int(last_point['subscribers'])}", fontsize=9, ha='left', va='center')
-
-            # 绘制总曲线
-            if not total_subs.empty:
-                plt.plot(total_subs['timestamp'], total_subs['subscribers'], label='Total', 
-                        linestyle='--', linewidth=2, color='black', marker='x')
-                
-                last_total = total_subs.iloc[-1]
-                plt.text(last_total['timestamp'], last_total['subscribers'], f" Total: {int(last_total['subscribers'])}", 
-                        fontsize=10, fontweight='bold', ha='left', va='center')
-
-            plt.title('Steam Mod Subscription Trends', fontsize=16)
-            plt.xlabel('Time', fontsize=12)
-            plt.ylabel('Subscribers', fontsize=12)
-            
-            # 优化X轴显示格式
-            import matplotlib.dates as mdates
-            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
-            plt.gcf().autofmt_xdate() # 自动旋转日期标签
-            
-            plt.grid(True, linestyle='--', alpha=0.5)
-            plt.legend(loc='best')
-            plt.tight_layout()
-            
-            plt.savefig(PLOT_FILE)
-            print(f"Plot saved to {PLOT_FILE}")
-            plt.close()
-
-    except Exception as e:
-        print(f"Error plotting: {e}")
+    """
+    读取CSV并绘制折线图
+    复用公共绘图模块
+    """
+    from plot_utils import plot_trends_from_csv
+    plot_trends_from_csv(DATA_FILE, PLOT_FILE)
 
 def job():
-    # 获取当前统一时间（归零秒数）
-    current_time = get_beijing_time(rounded=True)
+    # Get current time rounded to minutes
+    current_time = get_beijing_time()
     print(f"\n[{current_time}] Starting scraping job...")
     
-    if not os.path.exists(TRACK_FILE):
-        print(f"Error: {TRACK_FILE} not found!")
-        return
-
-    with open(TRACK_FILE, 'r', encoding='utf-8') as f:
-        urls = [line.strip() for line in f if line.strip()]
-
     current_batch_data = []
     
-    for url in urls:
-        print(f"Fetching: {url}")
-        data = get_mod_data(url)
-        if data:
-            # 统一注入时间戳
-            data['timestamp'] = current_time
-            print(f"  -> {data['title']}: {data['subscribers']} subscribers")
-            current_batch_data.append(data)
-        time.sleep(1)
+    # First, fetch main mod to establish the reference timestamp
+    from mod_config import MAIN_MOD_ID
+    
+    # Sort mods: main mod first, then others
+    sorted_mods = sorted(MODS.items(), key=lambda x: (not x[1].get('is_main', False), x[0]))
+    
+    for mod_id, mod_info in sorted_mods:
+        url = mod_info['url']
+        name = mod_info['name']
+        print(f"Fetching: {name} (ID: {mod_id})")
+        
+        result = get_mod_data(mod_id, url)
+        if result:
+            mod_id_fetched, subscribers = result
+            print(f"  -> {name}: {subscribers} subscribers")
+            current_batch_data.append({
+                'mod_id': mod_id_fetched,
+                'subscribers': subscribers
+            })
+        time.sleep(1)  # Polite delay
 
     if current_batch_data:
-        save_data(current_batch_data)
+        save_data(current_batch_data, current_time)
         plot_trends()
     
     print("Job finished.")
@@ -239,7 +188,7 @@ def main():
     args = parser.parse_args()
 
     print("Mod Tracker started.")
-    print(f"Tracking URLs from {TRACK_FILE}")
+    print(f"Tracking {len(MODS)} mods from mod_config.py")
     
     if args.once:
         print("Running in single-execution mode.")
