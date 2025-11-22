@@ -5,7 +5,7 @@ on:
     # GitHub Actions scheduled workflows are not guaranteed to run exactly on time
     # They may be delayed during high load periods, especially at the top of the hour
     # The cron expression '*/15 * * * *' means: run every 15 minutes (at :00, :15, :30, :45)
-    - cron: '*/15 * * * *'
+    - cron: '*/60 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 permissions:
