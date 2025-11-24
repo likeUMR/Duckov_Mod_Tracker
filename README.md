@@ -1,6 +1,6 @@
 # Duckov Mod Tracker
 
-自动追踪并记录《Escape From Duckov》相关模组的订阅数量变化趋势。数据每10分钟自动更新一次。
+自动追踪并记录《Escape From Duckov》相关模组的订阅数量变化趋势。数据每1小时自动更新一次。
 
 ## 📈 订阅趋势图
 
