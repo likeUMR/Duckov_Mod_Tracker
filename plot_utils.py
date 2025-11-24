@@ -38,7 +38,7 @@ def plot_trends_from_csv(data_file, plot_file):
             date_format = '%m-%d %H:%M'
         elif days < 7:
             # Less than 1 week: use hour precision
-            precision = 'H'
+            precision = 'h'
             date_format = '%m-%d %H:00'
         elif days < 30:
             # Less than 1 month: use day precision
@@ -54,8 +54,8 @@ def plot_trends_from_csv(data_file, plot_file):
         # Normalize timestamps based on selected precision
         if precision == 'min':
             df['timestamp_normalized'] = df['timestamp'].dt.floor('min')
-        elif precision == 'H':
-            df['timestamp_normalized'] = df['timestamp'].dt.floor('H')
+        elif precision == 'h':
+            df['timestamp_normalized'] = df['timestamp'].dt.floor('h')
         elif precision == 'D':
             df['timestamp_normalized'] = df['timestamp'].dt.floor('D')
         else:  # 'W'
@@ -97,6 +97,10 @@ def plot_trends_from_csv(data_file, plot_file):
         # Sort by time
         df = df.sort_values('timestamp')
         
+        # Remove duplicates: for each (timestamp, mod_id) combination, keep only the latest one
+        # This prevents double-counting when multiple data points align to the same timestamp
+        df = df.drop_duplicates(subset=['timestamp', 'mod_id'], keep='last')
+        
         # Use xkcd style, but need special handling to avoid dash pattern errors
         try:
             # Try using xkcd style
@@ -105,7 +109,7 @@ def plot_trends_from_csv(data_file, plot_file):
                 ax = fig.add_subplot(111)
                 
                 mod_ids = df['mod_id'].unique()
-                # Calculate totals using aligned timestamps
+                # Calculate totals using aligned timestamps (after deduplication)
                 total_subs = df.groupby('timestamp')['subscribers'].sum().reset_index()
                 
                 print(f"Found {len(mod_ids)} mods and {len(df)} data points.")
@@ -165,7 +169,7 @@ def plot_trends_from_csv(data_file, plot_file):
             ax = fig.add_subplot(111)
             
             mod_ids = df['mod_id'].unique()
-            # Calculate totals using aligned timestamps
+            # Calculate totals using aligned timestamps (after deduplication)
             total_subs = df.groupby('timestamp')['subscribers'].sum().reset_index()
             
             print(f"Found {len(mod_ids)} mods and {len(df)} data points.")
